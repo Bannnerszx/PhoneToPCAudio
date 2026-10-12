@@ -39,3 +39,8 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+# Python (pc-sender)
+__pycache__/
+.venv/
+pc-sender/build/

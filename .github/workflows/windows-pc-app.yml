@@ -1,0 +1,51 @@
+# Builds PCAudioSetup.exe, the Windows installer for the PC side (pc-sender/).
+name: Windows PC app
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    # Version tags (v1.0.0, ...) also publish the installer as a GitHub release.
+    tags: ['v*']
+    # (Path filters don't apply to tag pushes.)
+    paths:
+      - 'pc-sender/**'
+      - '.github/workflows/windows-pc-app.yml'
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write # for attaching the installer to a release
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      # Not guaranteed to be preinstalled on the runner image.
+      - name: Install Inno Setup
+        run: choco install innosetup --no-progress -y
+
+      - name: Build PCAudio.exe and PCAudioSetup.exe
+        run: ./pc-sender/build.ps1
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PCAudioSetup
+          path: pc-sender/build/PCAudioSetup.exe
+          if-no-files-found: error
+          retention-days: 30
+
+      # The README links to releases/latest/download/PCAudioSetup.exe. The iOS
+      # workflow runs for the same tag; whichever finishes first creates the release.
+      - name: Attach to the GitHub release
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" --verify-tag --title "PCAudio $GITHUB_REF_NAME" --notes-file .github/release-notes.md || true
+          gh release upload "$GITHUB_REF_NAME" pc-sender/build/PCAudioSetup.exe --clobber

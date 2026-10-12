@@ -6,13 +6,22 @@ on:
   workflow_dispatch:
   push:
     branches: [main]
+    # Version tags (v1.0.0, ...) also publish the .ipa as a GitHub release.
+    tags: ['v*']
+    # PC-only changes don't need a (slow, 10x-billed) macOS build.
+    # (Path filters don't apply to tag pushes.)
+    paths-ignore:
+      - 'pc-sender/**'
+      - '.github/workflows/windows-pc-app.yml'
 
 jobs:
   build:
     runs-on: macos-latest
     timeout-minutes: 60
+    permissions:
+      contents: write # for attaching the .ipa to a release
     env:
-      APP_NAME: HelloApp # must match "name" in app.json (Xcode scheme/workspace name)
+      APP_NAME: PCAudio # must match "name" in app.json (Xcode scheme/workspace name)
     steps:
       - uses: actions/checkout@v4
 
@@ -58,3 +67,13 @@ jobs:
           name: ${{ env.APP_NAME }}-ipa
           path: ${{ env.APP_NAME }}.ipa
           retention-days: 14
+
+      # The README links to releases/latest/download/PCAudio.ipa. The Windows
+      # workflow runs for the same tag; whichever finishes first creates the release.
+      - name: Attach to the GitHub release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" --verify-tag --title "PCAudio $GITHUB_REF_NAME" --notes-file .github/release-notes.md || true
+          gh release upload "$GITHUB_REF_NAME" "${APP_NAME}.ipa" --clobber
