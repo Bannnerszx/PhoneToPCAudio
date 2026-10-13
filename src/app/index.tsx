@@ -3,6 +3,7 @@ import { useCallback, useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { streamUrl, type FoundPC } from '@/audio/sender';
+import Mic from '@/components/mic';
 import Player, { isExpoGo } from '@/components/player';
 import { Button, Card, SectionFooter, SectionHeader, StepButton, usePalette } from '@/components/ui';
 import { usePCSearch } from '@/hooks/use-pc-search';
@@ -64,6 +65,14 @@ function Home({ settings, update }: HomeProps) {
             {isExpoGo
               ? 'Keep this screen open while you listen. In Expo Go, the sound stops when the phone locks.'
               : 'Keeps playing when you lock your iPhone or switch apps.'}
+          </SectionFooter>
+          <SectionHeader>Microphone</SectionHeader>
+          <Card>
+            <Mic key={state.pc.host} url={streamUrl(state.pc.host)} />
+          </Card>
+          <SectionFooter>
+            Lets apps on your PC hear your iPhone. With VB-CABLE installed on the PC, pick “CABLE Output” as
+            the microphone in Discord, Zoom or OBS. Without it, you hear yourself on the PC’s speakers.
           </SectionFooter>
           <Button variant="plain" label="Not your PC? Search again" onPress={() => restart(searchAgain)} />
         </>

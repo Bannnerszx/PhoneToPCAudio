@@ -1,11 +1,13 @@
 """Streams this PC's sound to the PCAudio app over Wi-Fi.
 
 Captures whatever Windows is playing (WASAPI loopback) and sends it to every
-connected phone as raw 16-bit PCM over a WebSocket.
+connected phone as raw 16-bit PCM over a WebSocket. Also plays a phone's
+microphone when the app's "Use as microphone" is on (see mic.py).
 
     py sender.py            # stream the default speakers
     py sender.py --list     # list devices you can stream from
     py sender.py --device 12
+    py sender.py --mic-device 7  # where the phone's microphone plays (see --list)
 
 This is the console version. tray.py wraps it as the PCAudio Windows app.
 """
@@ -21,6 +23,8 @@ from collections.abc import Callable
 import pyaudiowpatch as pyaudio
 from websockets.asyncio.server import ServerConnection, serve
 from websockets.exceptions import ConnectionClosed
+
+import mic
 
 DEFAULT_PORT = 8765
 CHUNK_MS = 10
@@ -172,20 +176,51 @@ async def run(
     device_index: int | None,
     port: int,
     on_listeners: Callable[[int], None] | None = None,
+    mic_device: int | None = None,
+    on_mic: Callable[[list[str]], None] | None = None,
 ) -> None:
-    """Streams until cancelled. `on_listeners` gets the phone count when it changes."""
+    """Streams until cancelled. `on_listeners` gets the phone count when it changes, and
+    `on_mic` the devices that phone microphones are playing on."""
     # The app's network search connects to /probe on every address; the reply
     # tells it which one is a PCAudio sender, and its name.
     hello = json.dumps({"type": "hello", "app": "pcaudio", "name": socket.gethostname()})
     broadcast = Broadcast()
 
+    mics: list[str] = []
+
     def listeners_changed() -> None:
         if on_listeners:
             on_listeners(len(broadcast.queues))
 
+    def mics_changed() -> None:
+        if on_mic:
+            on_mic(list(mics))
+
+    async def handle_mic(ws: ServerConnection) -> None:
+        address = ws.remote_address[0]
+        playing_on = None
+
+        def on_ready(device_name: str) -> None:
+            nonlocal playing_on
+            playing_on = device_name
+            mics.append(device_name)
+            mics_changed()
+            print(f"Phone microphone on: {address}, playing on {device_name}")
+
+        try:
+            await mic.receive(ws, mic_device, on_ready)
+        finally:
+            if playing_on:
+                mics.remove(playing_on)
+                mics_changed()
+                print(f"Phone microphone off: {address}")
+
     async def handle(ws: ServerConnection) -> None:
         if ws.request and ws.request.path == "/probe":
             await ws.send(hello)
+            return
+        if ws.request and ws.request.path == "/mic":
+            await handle_mic(ws)
             return
         address = ws.remote_address[0]
         queue: asyncio.Queue[bytes | str] = asyncio.Queue(maxsize=QUEUE_CHUNKS)
@@ -219,19 +254,28 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Stream this PC's sound to the PCAudio app.")
     parser.add_argument("--port", type=int, default=DEFAULT_PORT, help=f"default {DEFAULT_PORT}")
     parser.add_argument("--device", type=int, help="loopback device index (see --list)")
-    parser.add_argument("--list", action="store_true", help="list loopback devices and exit")
+    parser.add_argument(
+        "--mic-device", type=int, help="output device for the phone's microphone (see --list)"
+    )
+    parser.add_argument("--list", action="store_true", help="list audio devices and exit")
     args = parser.parse_args()
 
     if args.list:
         with pyaudio.PyAudio() as pa:
+            print("Devices to stream from (--device):")
             default = pa.get_default_wasapi_loopback()["index"]
             for device in loopback_devices(pa):
+                marker = "*" if device["index"] == default else " "
+                print(f"{marker} {device['index']:>3}  {device['name']}")
+            print("Devices to play the phone's microphone on (--mic-device):")
+            default = mic.pick_output(pa, None)["index"]
+            for device in mic.output_devices(pa):
                 marker = "*" if device["index"] == default else " "
                 print(f"{marker} {device['index']:>3}  {device['name']}")
         return
 
     try:
-        asyncio.run(run(args.device, args.port))
+        asyncio.run(run(args.device, args.port, mic_device=args.mic_device))
     except KeyboardInterrupt:
         print("Stopped.")
 

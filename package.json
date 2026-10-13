@@ -6,6 +6,8 @@
     "@expo/metro-runtime": "~57.0.16",
     "@react-native-async-storage/async-storage": "2.2.0",
     "expo": "~57.0.27",
+    "expo-asset": "~57.0.19",
+    "expo-audio": "~57.0.5",
     "expo-constants": "~57.0.21",
     "expo-keep-awake": "~57.0.2",
     "expo-linking": "~57.0.12",
@@ -33,5 +35,12 @@
     "web": "expo start --web",
     "lint": "expo lint"
   },
-  "private": true
+  "private": true,
+  "expo": {
+    "autolinking": {
+      "exclude": [
+        "expo-audio"
+      ]
+    }
+  }
 }

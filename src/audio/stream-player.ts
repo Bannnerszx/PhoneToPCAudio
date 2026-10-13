@@ -33,6 +33,7 @@ type AudioBufferSourceLike = {
 
 export type AudioContextLike = {
   readonly currentTime: number;
+  readonly state?: string;
   readonly destination: unknown;
   createBuffer(channels: number, length: number, sampleRate: number): AudioBufferLike;
   createBufferSource(): AudioBufferSourceLike;
@@ -96,6 +97,11 @@ export function createStreamPlayer(options: Options): StreamPlayer {
   function tick() {
     if (socket?.readyState === WebSocket.OPEN && Date.now() - lastMessageAt > STALL_TIMEOUT_MS) {
       dropSocket(socket, 'Lost connection to the PC');
+    }
+    // iOS suspends the context while something else holds the audio session, e.g.
+    // the microphone in Expo Go (record-only). Pick up again once it's released.
+    if (ctx && (ctx.state === 'suspended' || ctx.state === 'interrupted')) {
+      ctx.resume().catch(() => {});
     }
     emit();
   }

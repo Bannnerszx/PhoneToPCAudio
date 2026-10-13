@@ -2,6 +2,7 @@ import { useEffect, useEffectEvent, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { AudioContext, AudioManager, PlaybackNotificationManager } from 'react-native-audio-api';
 
+import { activate, addSessionChangeListener, setAudioActive } from '@/audio/session';
 import {
   createStreamPlayer,
   describeStats,
@@ -30,10 +31,7 @@ export default function NativePlayer({ url, pcName, targetLatencyMs, onPlayingCh
   const playing = stats.state !== 'idle';
 
   async function play() {
-    // Must happen before the AudioContext is created. "playback" ignores the silent
-    // switch and is what lets audio continue in the background.
-    AudioManager.setAudioSessionOptions({ iosCategory: 'playback', iosMode: 'default', iosOptions: [] });
-    await activateSession();
+    await setAudioActive('player', true);
     player.start();
     void onPlayingChange(true);
     await showNowPlaying('playing');
@@ -43,7 +41,7 @@ export default function NativePlayer({ url, pcName, targetLatencyMs, onPlayingCh
     player.stop();
     void onPlayingChange(false);
     void showNowPlaying('paused');
-    void AudioManager.setAudioSessionActivity(false).catch(() => {});
+    void setAudioActive('player', false);
   }
 
   // The lock screen entry is a nicety; playback works without it.
@@ -70,7 +68,13 @@ export default function NativePlayer({ url, pcName, targetLatencyMs, onPlayingCh
   });
   const onInterruptionEnded = useEffectEvent(async () => {
     if (!playing) return;
-    await activateSession();
+    await activate();
+    player.stop();
+    player.start();
+  });
+  // The microphone was turned on or off, changing the audio session under the player.
+  const onSessionChange = useEffectEvent(() => {
+    if (!playing) return;
     player.stop();
     player.start();
   });
@@ -83,12 +87,13 @@ export default function NativePlayer({ url, pcName, targetLatencyMs, onPlayingCh
       AudioManager.addSystemEventListener('interruption', (event) => {
         if (event.type === 'ended') onInterruptionEnded();
       }),
+      addSessionChangeListener(() => onSessionChange()),
     ];
     return () => {
       subscriptions.forEach((subscription) => subscription?.remove());
       player.stop();
       void PlaybackNotificationManager.hide().catch(() => {});
-      void AudioManager.setAudioSessionActivity(false).catch(() => {});
+      void setAudioActive('player', false);
     };
   }, [player]);
 
@@ -107,15 +112,6 @@ export default function NativePlayer({ url, pcName, targetLatencyMs, onPlayingCh
       <Text style={[styles.status, { color: palette.secondaryText }]}>{describeStats(stats)}</Text>
     </View>
   );
-}
-
-async function activateSession() {
-  try {
-    await AudioManager.setAudioSessionActivity(true);
-  } catch (error) {
-    // Another app holding audio exclusively; the context may still start.
-    console.warn('Audio session activation failed', error);
-  }
 }
 
 const styles = StyleSheet.create({

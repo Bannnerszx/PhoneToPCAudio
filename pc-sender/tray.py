@@ -74,9 +74,10 @@ def describe_error(error: Exception) -> str:
 class SenderThread(threading.Thread):
     """Runs sender.run() on its own event loop, next to the tray icon's message loop."""
 
-    def __init__(self, on_listeners, on_error) -> None:
+    def __init__(self, on_listeners, on_mic, on_error) -> None:
         super().__init__(daemon=True)
         self.on_listeners = on_listeners
+        self.on_mic = on_mic
         self.on_error = on_error
         self.loop = asyncio.new_event_loop()
         self.task: asyncio.Task | None = None
@@ -85,7 +86,7 @@ class SenderThread(threading.Thread):
     def run(self) -> None:
         asyncio.set_event_loop(self.loop)
         self.task = self.loop.create_task(
-            sender.run(None, sender.DEFAULT_PORT, self.on_listeners)
+            sender.run(None, sender.DEFAULT_PORT, self.on_listeners, on_mic=self.on_mic)
         )
         self.started_task.set()
         try:
@@ -110,20 +111,33 @@ def main() -> None:
     idle_image = draw_icon(64, BLUE)
     live_image = draw_icon(64, GREEN)
     listeners = 0
+    # Devices that phone microphones are playing on.
+    mics: list[str] = []
 
     def status() -> str:
         if listeners == 0:
-            return "PCAudio: waiting for your iPhone"
+            return "PCAudio: iPhone microphone on" if mics else "PCAudio: waiting for your iPhone"
         if listeners == 1:
             return "PCAudio: playing on your iPhone"
         return f"PCAudio: playing on {listeners} devices"
 
+    def mic_status() -> str:
+        return f"iPhone microphone → {mics[0]}" if mics else ""
+
+    def refresh() -> None:
+        tray.icon = live_image if listeners or mics else idle_image
+        tray.title = status()
+        tray.update_menu()
+
     def on_listeners(count: int) -> None:
         nonlocal listeners
         listeners = count
-        tray.icon = live_image if count else idle_image
-        tray.title = status()
-        tray.update_menu()
+        refresh()
+
+    def on_mic(devices: list[str]) -> None:
+        nonlocal mics
+        mics = devices
+        refresh()
 
     def on_error(error: Exception) -> None:
         message_box(describe_error(error), MB_ICONERROR)
@@ -138,6 +152,9 @@ def main() -> None:
         status(),
         pystray.Menu(
             pystray.MenuItem(lambda _item: status(), None, enabled=False),
+            pystray.MenuItem(
+                lambda _item: mic_status(), None, enabled=False, visible=lambda _item: bool(mics)
+            ),
             # For typing into the app if its network search can't find this PC.
             pystray.MenuItem(lambda _item: f"Address: {sender.lan_ip()}", None, enabled=False),
             pystray.Menu.SEPARATOR,
@@ -150,7 +167,7 @@ def main() -> None:
             pystray.MenuItem("Quit", lambda icon, _item: icon.stop()),
         ),
     )
-    worker = SenderThread(on_listeners, on_error)
+    worker = SenderThread(on_listeners, on_mic, on_error)
 
     def setup(icon: pystray.Icon) -> None:
         icon.visible = True

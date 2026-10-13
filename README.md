@@ -42,6 +42,19 @@ below).
 You can lock your iPhone or switch to another app, and the sound keeps playing. You can also pause
 and resume it from the lock screen. Next time, just open PCAudio and tap **Play**.
 
+## Use your iPhone as the PC's microphone
+
+1. On your PC, install the free [VB-CABLE Virtual Audio Device](https://vb-audio.com/Cable/)
+   (unzip it, right-click **VBCABLE_Setup_x64.exe**, choose **Run as administrator**, then
+   **Install Driver**), and restart the PC.
+2. In PCAudio on your iPhone, tap **Use as microphone**. The first time, tap **Allow** when iOS asks
+   about the microphone.
+3. In the app that should hear you (Discord, Zoom, Teams, OBS…), choose **CABLE Output** as the
+   microphone.
+
+It works alongside **Play**, and keeps going when you lock your iPhone. Without VB-CABLE, your voice
+plays on the PC's speakers instead.
+
 ## If something isn't working
 
 **The app says "Can't find your PC"**

@@ -36,6 +36,7 @@
         "react-native-audio-api",
         {
           "iosBackgroundMode": true,
+          "iosMicrophonePermission": "PCAudio sends your microphone to your PC when you turn on Use as microphone.",
           "disableFFmpeg": true
         }
       ]

@@ -4,9 +4,9 @@ PCAudio has two parts:
 
 - **The PC app** (`pc-sender/`): a Windows tray app (Python, packaged with PyInstaller and Inno Setup).
   It captures the sound Windows is playing (WASAPI loopback) and streams it as uncompressed audio
-  over a WebSocket on port 8765.
+  over a WebSocket on port 8765. It also plays the iPhone's microphone (`pc-sender/mic.py`).
 - **The iPhone app** (Expo SDK 57 / React Native, Expo Router in `src/app/`): finds the PC on the
-  Wi‑Fi and plays the stream with a small, adjustable buffer.
+  Wi‑Fi and plays the stream with a small, adjustable buffer, and can send its microphone to the PC.
 
 Everything is built from Windows. No Mac is needed: iOS builds run on GitHub Actions.
 
@@ -62,6 +62,7 @@ py -m pip install -r pc-sender/requirements.txt
 py pc-sender/sender.py            # or double-click pc-sender/run-sender.bat
 py pc-sender/sender.py --list     # other audio devices; pick one with --device N
 py pc-sender/sender.py --port 9000
+py pc-sender/sender.py --mic-device 7   # where the phone's microphone plays (see --list)
 ```
 
 Running it from Python means Windows asks about the firewall the first time. Allow it for the network
@@ -82,6 +83,13 @@ Expo Go can't load the native audio library, so in Expo Go the app plays through
 - If you hear nothing with the silent switch on, turn the switch off.
 
 `src/components/player.tsx` picks the web player in Expo Go, and the native one in a build.
+
+The microphone records with `expo-audio` in Expo Go (`src/audio/expo-go-capture.ts`), and with
+`react-native-audio-api` in a build (`src/audio/native-capture.ts`):
+- While it records, `expo-audio` switches iOS to record-only audio, so **Play** goes quiet.
+- It stops when the phone locks, so the app keeps the screen on while the mic is on.
+- `expo-audio` is excluded from builds (`expo.autolinking.exclude` in `package.json`), so it can't
+  change the audio session under the native player. Don't import it outside the Expo Go mic.
 
 Checks before committing:
 
@@ -125,6 +133,13 @@ iPhone: WebSocket ─► src/audio/stream-player.ts ─► each chunk scheduled 
 - **Silence:** when nothing is playing, Windows delivers no audio at all, so the sender streams
   silence instead. That keeps the connection alive, keeps iOS treating the app as playing audio
   while locked, and lets the phone spot a dead link within 2 s and reconnect.
+- **The microphone** (`src/audio/mic-sender.ts` → `pc-sender/mic.py`): the phone connects to `/mic`.
+  The PC opens its output device ("CABLE Input" from VB-CABLE if installed, so apps can use
+  "CABLE Output" as a mic; otherwise the default speakers) and replies with the device's sample rate,
+  because Windows only accepts that rate. The phone records 10 ms mono chunks at it and sends them as
+  16-bit PCM. The PC keeps about 60 ms buffered and drops the oldest audio beyond 120 ms. While the
+  mic is on, the iOS session is `playAndRecord` in voice chat mode (`src/audio/session.ts`), whose
+  echo cancellation keeps the PC's sound on the phone's speaker out of the mic.
 - **Switching speakers:** Windows only reports a new default output device (headphones, monitor
   speakers…) to a newly opened capture. So whenever nothing has been captured for 3 s, the sender
   reopens it, which costs about 1% CPU while idle. After you switch devices mid-song, the phone is
