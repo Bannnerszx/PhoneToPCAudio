@@ -110,6 +110,10 @@ The built app plays through native audio (`react-native-audio-api`, in
 To build it, push to `main`, or open **Actions → iOS unsigned IPA → Run workflow**. A macOS runner
 builds an unsigned `.ipa`, and AltStore Classic signs it with your Apple ID when you install it.
 
+Without GitHub Actions, [Codemagic](https://codemagic.io) builds the same `.ipa` from `codemagic.yaml`:
+add the repository there, start the **iOS unsigned IPA** workflow, and download `PCAudio.ipa` from
+the build's artifacts.
+
 > macOS runners are free on public repos. On private repos, macOS minutes count 10x against your
 > monthly free minutes.
 
