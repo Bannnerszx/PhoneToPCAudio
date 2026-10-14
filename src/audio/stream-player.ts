@@ -33,6 +33,7 @@ type AudioBufferSourceLike = {
 
 export type AudioContextLike = {
   readonly currentTime: number;
+  readonly sampleRate: number;
   readonly state?: string;
   readonly destination: unknown;
   createBuffer(channels: number, length: number, sampleRate: number): AudioBufferLike;
@@ -47,7 +48,11 @@ type Options = {
   url: string;
   targetLatencyMs: number;
   // Called synchronously from start(), so a browser still sees the user gesture.
-  createContext: () => AudioContextLike;
+  createContext: (sampleRate?: number) => AudioContextLike;
+  // Recreate the context at the stream's sample rate. Needed for react-native-audio-api,
+  // which plays buffers at the context's rate: 44.1 kHz chunks in a 48 kHz context come
+  // out short and high-pitched, with a gap after each one. Browsers convert by themselves.
+  matchStreamRate?: boolean;
   onStats: (stats: PlayerStats) => void;
 };
 
@@ -150,6 +155,11 @@ export function createStreamPlayer(options: Options): StreamPlayer {
     const message = JSON.parse(text);
     if (message.type !== 'format' || message.encoding !== 's16le') return;
     format = { sampleRate: message.sampleRate, channels: message.channels };
+    if (options.matchStreamRate && ctx && ctx.sampleRate !== format.sampleRate) {
+      void ctx.close();
+      ctx = options.createContext(format.sampleRate);
+      void ctx.resume();
+    }
     nextTime = 0;
     setState('buffering');
   }
@@ -191,7 +201,9 @@ export function createStreamPlayer(options: Options): StreamPlayer {
     const source = ctx.createBufferSource();
     source.buffer = buffer;
     source.connect(ctx.destination as never);
-    source.start(nextTime);
+    // Start on a whole sample. react-native-audio-api rounds start times down, so a time
+    // a hair below the intended sample would start the chunk a sample early.
+    source.start((Math.round(nextTime * ctx.sampleRate) + 0.25) / ctx.sampleRate);
     nextTime += frames / sampleRate;
 
     if (state !== 'playing') setState('playing');

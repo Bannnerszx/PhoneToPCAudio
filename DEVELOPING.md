@@ -126,6 +126,9 @@ iPhone: WebSocket ─► src/audio/stream-player.ts ─► each chunk scheduled 
   app answers with its name. This takes a few seconds, and needs no Bonjour or other native code, so
   it works in Expo Go.
 - **No codec:** the audio is uncompressed, so there's no encoding or decoding delay.
+- **Sample rate:** the PC sends its output device's own rate (often 44.1 kHz). The native player
+  recreates its `AudioContext` at that rate, because `react-native-audio-api` plays buffers at the
+  context's rate without converting them.
 - **The buffer:** the player keeps about *Delay* ms of audio queued. If it runs dry (a "dropout"), it
   starts again at the target. If audio piles up after a Wi‑Fi hiccup, it skips 10 ms chunks until it's
   back at the target. That also corrects for the PC's and phone's clocks running at slightly
@@ -138,8 +141,11 @@ iPhone: WebSocket ─► src/audio/stream-player.ts ─► each chunk scheduled 
   "CABLE Output" as a mic; otherwise the default speakers) and replies with the device's sample rate,
   because Windows only accepts that rate. The phone records 10 ms mono chunks at it and sends them as
   16-bit PCM. The PC keeps about 60 ms buffered and drops the oldest audio beyond 120 ms. While the
-  mic is on, the iOS session is `playAndRecord` in voice chat mode (`src/audio/session.ts`), whose
-  echo cancellation keeps the PC's sound on the phone's speaker out of the mic.
+  mic is on, the iOS session is `playAndRecord` in voice chat mode (`src/audio/session.ts`), and
+  iOS voice processing is on, whose echo cancellation keeps the PC's sound on the phone's speaker
+  out of the mic. `react-native-audio-api` has no option for it, so
+  `patches/react-native-audio-api+0.13.6.patch` turns it on (applied by `patch-package` on
+  install). Update or drop the patch when you upgrade the library.
 - **Switching speakers:** Windows only reports a new default output device (headphones, monitor
   speakers…) to a newly opened capture. So whenever nothing has been captured for 3 s, the sender
   reopens it, which costs about 1% CPU while idle. After you switch devices mid-song, the phone is

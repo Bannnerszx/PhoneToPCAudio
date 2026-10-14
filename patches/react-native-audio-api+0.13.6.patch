@@ -1,0 +1,22 @@
+diff --git a/node_modules/react-native-audio-api/ios/audioapi/ios/system/AudioEngine.mm b/node_modules/react-native-audio-api/ios/audioapi/ios/system/AudioEngine.mm
+index d0e77d8..fee6c02 100644
+--- a/node_modules/react-native-audio-api/ios/audioapi/ios/system/AudioEngine.mm
++++ b/node_modules/react-native-audio-api/ios/audioapi/ios/system/AudioEngine.mm
+@@ -219,6 +219,17 @@ static AudioEngine *_sharedInstance = nil;
+     return NO;
+   }
+ 
++  // PCAudio patch: echo cancellation. With voice processing on, iOS removes what this
++  // engine plays (the PC's sound on the speaker) from the microphone, like a headset.
++  // It can only change while the engine is stopped, which it is when a recorder starts;
++  // stopping the recorder rebuilds the engine without it.
++  if (![self.audioEngine isRunning] && !self.audioEngine.inputNode.isVoiceProcessingEnabled) {
++    NSError *voiceProcessingError = nil;
++    if (![self.audioEngine.inputNode setVoiceProcessingEnabled:YES error:&voiceProcessingError]) {
++      NSLog(@"Error while enabling voice processing: %@", [voiceProcessingError debugDescription]);
++    }
++  }
++
+   AVAudioFormat *inputFormat = [self currentInputConnectionFormat];
+ 
+   if (inputFormat == nil) {

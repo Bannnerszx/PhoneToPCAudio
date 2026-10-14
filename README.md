@@ -55,6 +55,10 @@ and resume it from the lock screen. Next time, just open PCAudio and tap **Play*
 It works alongside **Play**, and keeps going when you lock your iPhone. Without VB-CABLE, your voice
 plays on the PC's speakers instead.
 
+While the microphone is on, the iPhone cancels the PC's sound from its speaker out of the mic, like
+a phone call, and **Play** sounds like a call too. For the best sound, use earphones or AirPods: you
+hear the PC in your ears, and the iPhone's microphone picks up only you.
+
 ## If something isn't working
 
 **The app says "Can't find your PC"**

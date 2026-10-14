@@ -2,8 +2,9 @@
 //
 // The player alone uses "playback": full-quality sound that ignores the silent switch and
 // keeps going in the background. While the microphone is on, the session is
-// "playAndRecord" in voice chat mode, whose echo cancellation keeps the PC's sound
-// (playing on the phone's speaker) out of the microphone.
+// "playAndRecord" in voice chat mode, and the recorder turns on iOS voice processing
+// (patches/react-native-audio-api+0.13.6.patch), whose echo cancellation keeps the PC's
+// sound (playing on the phone's speaker) out of the microphone.
 import { AudioManager } from 'react-native-audio-api';
 
 type User = 'player' | 'mic';

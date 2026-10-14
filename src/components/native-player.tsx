@@ -23,8 +23,9 @@ export default function NativePlayer({ url, pcName, targetLatencyMs, onPlayingCh
     createStreamPlayer({
       url,
       targetLatencyMs,
-      // Matching the stream's rate means iOS resamples (if at all) once, at the output.
-      createContext: () => new AudioContext({ sampleRate: 48000 }),
+      // Running at the stream's rate means iOS resamples (if at all) once, at the output.
+      createContext: (sampleRate = 48000) => new AudioContext({ sampleRate }),
+      matchStreamRate: true,
       onStats: setStats,
     }),
   );
