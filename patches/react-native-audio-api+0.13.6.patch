@@ -1,8 +1,23 @@
 diff --git a/node_modules/react-native-audio-api/ios/audioapi/ios/system/AudioEngine.mm b/node_modules/react-native-audio-api/ios/audioapi/ios/system/AudioEngine.mm
-index d0e77d8..fee6c02 100644
+index d0e77d8..797b7bf 100644
 --- a/node_modules/react-native-audio-api/ios/audioapi/ios/system/AudioEngine.mm
 +++ b/node_modules/react-native-audio-api/ios/audioapi/ios/system/AudioEngine.mm
-@@ -219,6 +219,17 @@ static AudioEngine *_sharedInstance = nil;
+@@ -52,6 +52,14 @@
+ 
+ static AudioEngine *_sharedInstance = nil;
+ 
++// PCAudio patch: when voice processing was last turned on (see SystemNotificationManager.mm).
++static CFAbsoluteTime voiceProcessingEnabledAt = 0;
++
++bool pcaudioVoiceProcessingChangedRecently()
++{
++  return CFAbsoluteTimeGetCurrent() - voiceProcessingEnabledAt < 2.0;
++}
++
+ - (void)createAudioEngineIfNeeded
+ {
+   if (self.audioEngine != nil) {
+@@ -219,6 +227,18 @@ static AudioEngine *_sharedInstance = nil;
      return NO;
    }
  
@@ -12,6 +27,7 @@ index d0e77d8..fee6c02 100644
 +  // stopping the recorder rebuilds the engine without it.
 +  if (![self.audioEngine isRunning] && !self.audioEngine.inputNode.isVoiceProcessingEnabled) {
 +    NSError *voiceProcessingError = nil;
++    voiceProcessingEnabledAt = CFAbsoluteTimeGetCurrent();
 +    if (![self.audioEngine.inputNode setVoiceProcessingEnabled:YES error:&voiceProcessingError]) {
 +      NSLog(@"Error while enabling voice processing: %@", [voiceProcessingError debugDescription]);
 +    }
@@ -20,3 +36,31 @@ index d0e77d8..fee6c02 100644
    AVAudioFormat *inputFormat = [self currentInputConnectionFormat];
  
    if (inputFormat == nil) {
+diff --git a/node_modules/react-native-audio-api/ios/audioapi/ios/system/SystemNotificationManager.mm b/node_modules/react-native-audio-api/ios/audioapi/ios/system/SystemNotificationManager.mm
+index 5557d58..5ab916f 100644
+--- a/node_modules/react-native-audio-api/ios/audioapi/ios/system/SystemNotificationManager.mm
++++ b/node_modules/react-native-audio-api/ios/audioapi/ios/system/SystemNotificationManager.mm
+@@ -8,6 +8,8 @@
+ 
+ static NSString *NotificationManagerContext = @"SystemNotificationManagerContext";
+ 
++bool pcaudioVoiceProcessingChangedRecently(); // PCAudio patch, AudioEngine.mm
++
+ - (instancetype)initWithAudioAPIModule:(AudioAPIModule *)audioAPIModule
+ {
+   if (self = [super init]) {
+@@ -252,6 +254,14 @@ static NSString *NotificationManagerContext = @"SystemNotificationManagerContext
+   AudioEngine *audioEngine = self.audioAPIModule.audioEngine;
+   AudioSessionManager *sessionManager = self.audioAPIModule.audioSessionManager;
+ 
++  // PCAudio patch: turning on voice processing changes the engine's configuration.
++  // Rebuilding the engine would turn it on again on the new engine, and so on in a
++  // loop, so just start the engine again.
++  if (pcaudioVoiceProcessingChangedRecently()) {
++    dispatch_async(dispatch_get_main_queue(), ^{ [audioEngine startIfNecessary]; });
++    return;
++  }
++
+   dispatch_async(dispatch_get_main_queue(), ^{
+     [sessionManager markInactive];
+     [audioEngine restartAudioEngine];
